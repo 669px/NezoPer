@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "numan-wa-bot",
+      name: "nezoper",
       script: "./main.js",
       instances: 1,
       autorestart: true,

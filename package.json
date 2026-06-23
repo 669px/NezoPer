@@ -1,7 +1,7 @@
 {
-  "name": "numan-wa-bot",
+  "name": "nezoper",
   "version": "1.0.0",
-  "description": "Premium WhatsApp AI Bot with facts memory and custom commands",
+  "description": "NezoPer WhatsApp AI assistant with memory, command support, and image generation",
   "main": "main.js",
   "scripts": {
     "start": "node main.js",
