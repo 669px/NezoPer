@@ -1,0 +1,11 @@
+node_modules
+auth_info
+users
+chats
+.env
+npm-debug.log
+.git
+.gitignore
+README.md
+Dockerfile
+ecosystem.config.js

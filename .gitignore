@@ -1,0 +1,19 @@
+# Node modules
+node_modules/
+
+# WhatsApp Connection Auth State (Very important to ignore, contains keys!)
+auth_info/
+
+# Local database directories
+users/
+chats/
+
+# Environment configurations and API keys
+.env
+.env*.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log

@@ -1,0 +1,20 @@
+{
+  "name": "numan-wa-bot",
+  "version": "1.0.0",
+  "description": "Premium WhatsApp AI Bot with facts memory and custom commands",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "nodemon main.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop numan-wa-bot",
+    "pm2:logs": "pm2 logs numan-wa-bot"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "axios": "^1.18.1",
+    "dotenv": "^17.4.2",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
