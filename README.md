@@ -1,71 +1,62 @@
-# /NezoPer
+# NezoPer
 
-A WhatsApp AI assistant built to remember user context, run smart commands, and deliver richer responses.
-
----
+A WhatsApp AI assistant built to remember user context, react naturally, adapt to each person's talking style, and handle useful actions without slash commands.
 
 ## Overview
 
-/NezoPer is a WhatsApp-based AI bot that uses chat memory, command handling, and external AI services to deliver a more intelligent and interactive experience.
-
----
+NezoPer is a WhatsApp-based AI bot that uses chat memory, natural-language action detection, lightweight style learning, and external AI services to deliver a more human chat experience.
 
 ## Features
 
-- **Memory storage** — preserves useful user details, preferences, and conversation facts.
-- **Natural chat flow** — emulates realistic typing delays and responsive dialogue.
-- **Command support** — handles bot commands with prefixes such as `/`, `!`, and `.`.
-- **AI image generation** — produces visuals on demand from chat prompts.
-- **Owner tools** — broadcast announcements, send direct replies, and manage bot behavior.
-- **Configurable filters** — choose when the bot replies in groups, DMs, or status updates.
-- **Activity tracking** — logs message counts, command usage, image requests, and uptime.
+- **Memory storage** - preserves useful user details, preferences, and conversation facts.
+- **Adaptive talking style** - learns each chat's length, tone, slang, punctuation, and energy, then replies in a smoother version of that style.
+- **Message reactions** - reacts to incoming messages with context-aware WhatsApp emoji reactions.
+- **Natural actions** - image generation, memory reset, help, broadcast, and say actions work from normal phrases instead of slash commands.
+- **AI image generation** - produces visuals when someone asks naturally, such as "draw a futuristic city".
+- **Owner tools** - broadcast announcements and send direct custom messages through natural owner-only phrases.
+- **Configurable filters** - choose when the bot replies in groups, DMs, broadcasts, or status updates.
+- **Activity tracking** - logs message counts, actions, image requests, and uptime.
 
----
+## Natural Actions
 
-## Commands
-
-| Command | Description | Permission |
+| Phrase example | Description | Permission |
 | :--- | :--- | :--- |
-| `/help` | Show the command list and usage details | Public |
-| `/draw <prompt>` | Generate an image from the prompt | Public |
-| `/forget` / `/clear` | Reset chat memory and history for the current chat | Public |
-| `/broadcast <msg>` | Send a message to every active chat | Owner only |
-| `/say <msg>` | Send a custom bot message in the current conversation | Owner only |
-
----
+| `help` or `what can you do` | Show available capabilities | Public |
+| `draw a neon city at night` | Generate an image from the prompt | Public |
+| `make an image of a cyberpunk room` | Generate an image from the prompt | Public |
+| `forget this chat` or `clear memory` | Reset memory and history for the current chat | Public |
+| `broadcast: your message` | Send a message to every active chat | Owner only |
+| `say: your message` | Send a custom bot message in the current conversation | Owner only |
 
 ## Project Structure
 
-```
+```text
 .
-├── auth_info/          # WhatsApp authentication state files
-├── chats/              # Runtime data and logs
-├── users/              # Saved user profiles and facts
-├── .env                # Environment variables and secrets
-├── main.js             # Bot entry point and behavior logic
-├── memory.md           # AI personality and instruction prompt
-├── package.json        # Project metadata and dependencies
-└── README.md           # Project documentation
+auth_info/
+chats/
+users/
+.env
+main.js
+memory.md
+package.json
+README.md
 ```
-
----
 
 ## Setup
 
 ### Prerequisites
+
 - Node.js v16 or newer
 - A WhatsApp account to link with the bot
 
 ### Environment Configuration
+
 Create a `.env` file at the project root:
 
 ```env
 AI_PROVIDER=openai
 AI_API_KEY=sk-...your-key...
 AI_MODEL=gpt-4o-mini
-
-# Optional override
-# AI_BASE_URL=https://api.openai.com/v1
 
 BOT_NAME=NezoPer
 OWNER_NUMBER=923001234567
@@ -79,22 +70,23 @@ DM_AUTO_REPLY=true
 GROUP_AUTO_REPLY=true
 IGNORE_BROADCASTS=true
 IGNORE_STATUS=true
+REACT_TO_MESSAGES=true
 ```
 
-### Install and Run
+## Install and Run
 
 ```bash
 npm install
 npm start
 ```
 
-### Development mode
+## Development mode
 
 ```bash
 npm run dev
 ```
 
-### PM2 deployment
+## PM2 deployment
 
 ```bash
 npm run pm2:start
@@ -102,7 +94,7 @@ npm run pm2:logs
 npm run pm2:stop
 ```
 
-### Docker deployment
+## Docker deployment
 
 ```bash
 docker build -t nezoper .
@@ -115,8 +107,6 @@ docker run -d \
   nezoper
 ```
 
----
-
 ## WhatsApp Connection
 
 1. Start the bot.
@@ -124,19 +114,15 @@ docker run -d \
 3. Go to Linked Devices and scan the QR code shown in the terminal.
 4. Confirm the connection once the bot logs success.
 
----
-
 ## Safety and Reliability
 
-- **Spam protection** — rate limiting prevents rapid-fire abuse and protects API usage.
-- **Persistent logging** — runtime events are stored under `chats/` for debugging.
-- **Startup validation** — required settings are checked before the bot begins processing messages.
-
----
+- **Spam protection** - rate limiting prevents rapid-fire abuse and protects API usage.
+- **Persistent logging** - runtime events are stored under `chats/` for debugging.
+- **Startup validation** - required settings are checked before the bot begins processing messages.
 
 ## Memory and Profiles
 
-The bot stores extracted facts and conversation history in `users/`.
+The bot stores extracted facts, conversation history, and style data in `users/`.
 
 Example profile:
 
@@ -147,14 +133,21 @@ Example profile:
     "The user is a software engineering student.",
     "The user prefers iced coffee."
   ],
+  "style": {
+    "samples": 12,
+    "avgWords": 7,
+    "lowerCaseRate": 0.92,
+    "slangCounts": {
+      "bro": 4,
+      "fr": 2
+    }
+  },
   "history": [
-    { "role": "user", "content": "Hi" },
-    { "role": "assistant", "content": "Hello! How can I help today?" }
+    { "role": "user", "content": "hi bro" },
+    { "role": "assistant", "content": "yo bro, what we fixing today?" }
   ]
 }
 ```
-
----
 
 ## Customization
 

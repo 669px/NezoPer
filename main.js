@@ -1,6 +1,6 @@
 const fs = require("fs")
 const path = require("path")
-// Load environment variables relative to the script location
+
 require("dotenv").config({ path: path.join(__dirname, ".env") })
 
 const axios = require("axios")
@@ -20,7 +20,7 @@ const MEMORY = path.join(ROOT, "memory.md")
 const STATS_FILE = path.join(CHATS, "stats.json")
 const LOG_FILE = path.join(CHATS, "bot.log")
 
-// Ensure essential directories exist
+
 for (const d of [USERS, CHATS]) if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true })
 
 const read = p => fs.existsSync(p) ? fs.readFileSync(p, "utf8") : ""
@@ -31,58 +31,60 @@ const save = (p, v) => fs.writeFileSync(p, JSON.stringify(v, null, 2))
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-// Persistent logs writer
+const STYLE_SLANG_WORDS = ["bro", "bruh", "yo", "lol", "lmao", "fr", "ngl", "btw", "idk", "u", "ur", "rn", "tbh", "pls", "plz"]
+
+
 function appendToLogFile(level, msg) {
   try {
     const timestamp = new Date().toISOString()
     const logLine = `[${timestamp}] [${level}] ${msg}\n`
     fs.appendFileSync(LOG_FILE, logLine, "utf8")
   } catch (e) {
-    // Ignore logging write failures silently in case of file locks
+
   }
 }
 
-// Enhanced logging helper
+
 const log = {
   info: (msg) => {
-    console.log(`[🤖 INFO] ${msg}`)
+    console.log(`[INFO] ${msg}`)
     appendToLogFile("INFO", msg)
   },
   warn: (msg) => {
-    console.warn(`[⚠️ WARN] ${msg}`)
+    console.warn(`[WARN] ${msg}`)
     appendToLogFile("WARN", msg)
   },
   error: (msg, err) => {
     const errText = err ? ` | Error: ${err.message || err}` : ""
-    console.error(`[❌ ERROR] ${msg}`, err || "")
+    console.error(`[ERROR] ${msg}`, err || "")
     appendToLogFile("ERROR", `${msg}${errText}`)
   },
   success: (msg) => {
-    console.log(`[✅ SUCCESS] ${msg}`)
+    console.log(`[SUCCESS] ${msg}`)
     appendToLogFile("SUCCESS", msg)
   },
   chat: (jid, text) => {
     const logMsg = `[${jid}] -> "${text}"`
-    console.log(`[📬 CHAT] ${logMsg}`)
+    console.log(`[CHAT] ${logMsg}`)
     appendToLogFile("CHAT", logMsg)
   },
   reply: (jid, text) => {
     const logMsg = `[${jid}] <- "${text}"`
-    console.log(`[✉️ REPLY] ${logMsg}`)
+    console.log(`[REPLY] ${logMsg}`)
     appendToLogFile("REPLY", logMsg)
   },
   cmd: (jid, cmd) => {
-    const logMsg = `[${jid}] executed: /${cmd}`
-    console.log(`[⚡ CMD] ${logMsg}`)
+    const logMsg = `[${jid}] action: ${cmd}`
+    console.log(`[CMD] ${logMsg}`)
     appendToLogFile("CMD", logMsg)
   }
 }
 
-// Startup Environment Variables Validation
+
 function validateEnv() {
   const apiKey = process.env.AI_API_KEY || process.env.FEATHERLESS_API_KEY
   const model = process.env.AI_MODEL || process.env.FEATHERLESS_MODEL
-  
+
   if (!apiKey) {
     log.error("CRITICAL CONFIG ERROR: Missing AI API Key. Please configure AI_API_KEY (or FEATHERLESS_API_KEY) in your .env file.")
     process.exit(1)
@@ -91,8 +93,8 @@ function validateEnv() {
     log.error("CRITICAL CONFIG ERROR: Missing AI model name. Please configure AI_MODEL (or FEATHERLESS_MODEL) in your .env file.")
     process.exit(1)
   }
-  
-  // Set defaults for optional vars if they don't exist
+
+
   process.env.AI_PROVIDER = process.env.AI_PROVIDER || "featherless"
   process.env.BOT_NAME = process.env.BOT_NAME || "Numan"
   process.env.TEMPERATURE = process.env.TEMPERATURE || "0.9"
@@ -103,27 +105,28 @@ function validateEnv() {
   process.env.GROUP_AUTO_REPLY = process.env.GROUP_AUTO_REPLY || "true"
   process.env.IGNORE_BROADCASTS = process.env.IGNORE_BROADCASTS || "true"
   process.env.IGNORE_STATUS = process.env.IGNORE_STATUS || "true"
-  
+  process.env.REACT_TO_MESSAGES = process.env.REACT_TO_MESSAGES || "true"
+
   log.info("Environment configuration validated successfully.")
 }
 
-// Run config validation
+
 validateEnv()
 
-// Cooldown & Anti-Spam Rate Limiter
-const COOLDOWNS = new Map() // JID -> Array of timestamps
-const RATE_LIMIT_WARNED = new Map() // JID -> Timestamp of last warning
+
+const COOLDOWNS = new Map()
+const RATE_LIMIT_WARNED = new Map()
 
 function checkRateLimit(jid) {
   const now = Date.now()
   const userTimestamps = COOLDOWNS.get(jid) || []
-  
-  // Keep only timestamps from the last 10 seconds
+
+
   const recent = userTimestamps.filter(t => now - t < 10000)
   recent.push(now)
   COOLDOWNS.set(jid, recent)
-  
-  // If user sends more than 4 messages in 10 seconds, trigger limit
+
+
   if (recent.length > 4) {
     return true
   }
@@ -133,14 +136,14 @@ function checkRateLimit(jid) {
 function shouldSendWarning(jid) {
   const now = Date.now()
   const lastWarn = RATE_LIMIT_WARNED.get(jid) || 0
-  if (now - lastWarn > 60000) { // Limit warnings to once per minute per user/chat JID
+  if (now - lastWarn > 60000) {
     RATE_LIMIT_WARNED.set(jid, now)
     return true
   }
   return false
 }
 
-// User helper
+
 function userFile(jid) {
   return path.join(USERS, `${jid.replace(/[^a-zA-Z0-9]/g, "_")}.json`)
 }
@@ -157,7 +160,149 @@ function profile(jid) {
   return data
 }
 
-// Stats helpers
+function clampRatio(n) {
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(1, n))
+}
+
+function weightedAverage(oldValue, newValue, samples) {
+  if (!Number.isFinite(oldValue) || samples <= 1) return newValue
+  const weight = Math.min(samples, 25)
+  return ((oldValue * (weight - 1)) + newValue) / weight
+}
+
+function analyzeStyleSample(text) {
+  const words = text.trim().split(/\s+/).filter(Boolean)
+  const letters = text.match(/[a-z]/gi) || []
+  const lowercaseLetters = text.match(/[a-z]/g) || []
+  const uppercaseLetters = text.match(/[A-Z]/g) || []
+  const slang = STYLE_SLANG_WORDS.filter(word => new RegExp(`\\b${word}\\b`, "i").test(text))
+
+  return {
+    chars: text.length,
+    words: words.length,
+    lowerCaseRate: letters.length ? lowercaseLetters.length / letters.length : 0,
+    upperCaseRate: letters.length ? uppercaseLetters.length / letters.length : 0,
+    questionRate: text.includes("?") ? 1 : 0,
+    exclamationRate: text.includes("!") ? 1 : 0,
+    emojiRate: /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(text) ? 1 : 0,
+    slang
+  }
+}
+
+function updateStyleProfile(profileData, text) {
+  const sample = analyzeStyleSample(text)
+  const style = profileData.style || {}
+  const samples = (style.samples || 0) + 1
+  const slangCounts = style.slangCounts || {}
+
+  for (const word of sample.slang) {
+    slangCounts[word] = (slangCounts[word] || 0) + 1
+  }
+
+  profileData.style = {
+    samples,
+    avgChars: Math.round(weightedAverage(style.avgChars, sample.chars, samples)),
+    avgWords: Math.round(weightedAverage(style.avgWords, sample.words, samples)),
+    lowerCaseRate: clampRatio(weightedAverage(style.lowerCaseRate, sample.lowerCaseRate, samples)),
+    upperCaseRate: clampRatio(weightedAverage(style.upperCaseRate, sample.upperCaseRate, samples)),
+    questionRate: clampRatio(weightedAverage(style.questionRate, sample.questionRate, samples)),
+    exclamationRate: clampRatio(weightedAverage(style.exclamationRate, sample.exclamationRate, samples)),
+    emojiRate: clampRatio(weightedAverage(style.emojiRate, sample.emojiRate, samples)),
+    slangCounts
+  }
+}
+
+function describeStyle(style = {}) {
+  if (!style.samples) {
+    return "No stable style profile yet. Mirror the latest message naturally and keep it human."
+  }
+
+  const length = style.avgWords <= 8 ? "usually sends short messages" :
+    style.avgWords >= 28 ? "usually sends longer, more detailed messages" :
+    "usually sends medium-length messages"
+  const casing = style.lowerCaseRate > 0.9 && style.upperCaseRate < 0.08 ? "leans lowercase and casual" :
+    style.upperCaseRate > 0.18 ? "uses more uppercase emphasis" :
+    "uses normal casing"
+  const punctuation = [
+    style.questionRate > 0.35 ? "asks questions often" : null,
+    style.exclamationRate > 0.25 ? "uses excited punctuation" : null,
+    style.emojiRate > 0.2 ? "uses emojis sometimes" : null
+  ].filter(Boolean).join(", ")
+  const slang = Object.entries(style.slangCounts || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([word]) => word)
+    .join(", ")
+
+  return [
+    `User style profile from ${style.samples} message(s): ${length}; ${casing}.`,
+    punctuation ? `Signals: ${punctuation}.` : "",
+    slang ? `Common casual words to mirror lightly when natural: ${slang}.` : "",
+    "Match their language, pace, and directness, but make the reply clearer, warmer, and slightly smoother than the input. Do not parody them."
+  ].filter(Boolean).join(" ")
+}
+
+function extractImagePrompt(text) {
+  const patterns = [
+    /^(?:draw|paint|sketch)\s+(.+)/i,
+    /^(?:generate|create|make)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|art|drawing)\s+(?:of\s+)?(.+)/i,
+    /(?:can you|could you|please)\s+(?:draw|paint|sketch)\s+(.+)/i,
+    /(?:can you|could you|please)\s+(?:generate|create|make)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|art|drawing)\s+(?:of\s+)?(.+)/i
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match?.[1]) return match[1].trim()
+  }
+
+  return ""
+}
+
+function detectNaturalAction(text, isOwner) {
+  const normalized = text.trim()
+  const lower = normalized.toLowerCase()
+  const imagePrompt = extractImagePrompt(normalized)
+
+  if (/^(help|what can you do|features|commands)$/i.test(lower)) {
+    return { type: "help" }
+  }
+
+  if (/(forget|clear|reset).*(memory|chat|history|conversation)|forget everything|start fresh/i.test(lower)) {
+    return { type: "clear" }
+  }
+
+  if (imagePrompt) {
+    return { type: "image", args: imagePrompt }
+  }
+
+  if (isOwner) {
+    const broadcast = normalized.match(/^broadcast(?:\s+this|\s+message)?[:\s]+([\s\S]+)/i)
+    if (broadcast?.[1]) return { type: "broadcast", args: broadcast[1].trim() }
+
+    const say = normalized.match(/^say[:\s]+([\s\S]+)/i)
+    if (say?.[1]) return { type: "say", args: say[1].trim() }
+  }
+
+  return null
+}
+
+async function reactToIncomingMessage(sock, jid, msg, text, mediaType) {
+  if (process.env.REACT_TO_MESSAGES !== "true") return
+
+  const lower = text.toLowerCase()
+  let reaction = "\uD83D\uDC4D"
+  if (/\b(lol|lmao|haha|hehe|funny)\b/i.test(lower)) reaction = "\uD83D\uDE02"
+  else if (/\b(sad|hurt|miss|sorry|bad day|depressed|upset)\b/i.test(lower)) reaction = "\u2764\uFE0F"
+  else if (/\b(thanks|thank you|ty|appreciate)\b/i.test(lower)) reaction = "\uD83D\uDE4F"
+  else if (/\b(wow|nice|great|awesome|fire|cool|crazy|insane)\b/i.test(lower)) reaction = "\uD83D\uDD25"
+  else if (text.includes("?")) reaction = "\uD83D\uDC40"
+  else if (mediaType) reaction = "\uD83D\uDC40"
+
+  await sock.sendMessage(jid, { react: { text: reaction, key: msg.key } }).catch(() => {})
+}
+
+
 function getStats() {
   return json(STATS_FILE, {
     messagesReceived: 0,
@@ -174,32 +319,32 @@ function updateStats(updater) {
   save(STATS_FILE, current)
 }
 
-// Web Link Preview scraper
+
 async function getLinkPreviews(text) {
   const urlRegex = /(https?:\/\/[^\s]+)/g
   const urls = text.match(urlRegex)
   if (!urls || urls.length === 0) return ""
 
   let previewText = "\n\n[Link Previews:]"
-  const targetUrls = urls.slice(0, 2) // limit to first 2 URLs to avoid bloating
-  
+  const targetUrls = urls.slice(0, 2)
+
   for (const url of targetUrls) {
     try {
       const res = await axios.get(url, {
-        headers: { 
+        headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9"
         },
         timeout: 2500
       })
-      
+
       const titleMatch = res.data.match(/<title>([^<]+)<\/title>/i)
       const descMatch = res.data.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
                         res.data.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i)
-      
+
       const title = titleMatch ? titleMatch[1].trim() : "No Title"
       const desc = descMatch ? descMatch[1].trim() : "No description available."
-      
+
       const cleanHTML = str => str
         .replace(/&amp;/g, "&")
         .replace(/&lt;/g, "<")
@@ -207,16 +352,14 @@ async function getLinkPreviews(text) {
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
         .replace(/\s+/g, " ")
-      
+
       previewText += `\n- *URL:* ${url}\n  *Title:* ${cleanHTML(title)}\n  *Description:* ${cleanHTML(desc)}`
     } catch (e) {
-      // Ignore URL crawl failures silently
     }
   }
   return previewText === "\n\n[Link Previews:]" ? "" : previewText
 }
 
-// Universal AI Client (Supports OpenAI, Anthropic, Gemini, OpenRouter, Groq, Featherless, Custom)
 async function ai(messages) {
   const provider = (process.env.AI_PROVIDER || "featherless").toLowerCase()
   const apiKey = process.env.AI_API_KEY || process.env.FEATHERLESS_API_KEY
@@ -228,7 +371,6 @@ async function ai(messages) {
     throw new Error("AI API Key is missing. Check environment config.")
   }
 
-  // Define defaults base url depending on provider
   let baseUrl = process.env.AI_BASE_URL || process.env.FEATHERLESS_BASE_URL
   if (!baseUrl) {
     if (provider === "openai") baseUrl = "https://api.openai.com/v1"
@@ -237,12 +379,12 @@ async function ai(messages) {
     else if (provider === "openrouter") baseUrl = "https://openrouter.ai/api/v1"
     else if (provider === "groq") baseUrl = "https://api.groq.com/openai/v1"
     else if (provider === "featherless") baseUrl = "https://api.featherless.ai/v1"
-    else baseUrl = "https://api.openai.com/v1" // general fallback
+    else baseUrl = "https://api.openai.com/v1"
   }
 
-  // --- ANTHROPIC PROVIDER ---
+
   if (provider === "anthropic") {
-    // Re-arrange prompt system params and strip system role from messages
+
     const systemPrompt = messages.filter(m => m.role === "system").map(m => m.content).join("\n")
     const formattedMessages = messages.filter(m => m.role !== "system").map(m => ({
       role: m.role === "assistant" ? "assistant" : "user",
@@ -269,9 +411,9 @@ async function ai(messages) {
     return res.data.content[0].text.trim()
   }
 
-  // --- GEMINI PROVIDER ---
+
   if (provider === "gemini") {
-    // Route through Gemini's standard OpenAI-compatible API
+
     let geminiUrl = baseUrl.replace(/\/$/, "")
     if (!geminiUrl.includes("/openai")) {
       geminiUrl = `${geminiUrl}/openai`
@@ -294,7 +436,7 @@ async function ai(messages) {
     return res.data.choices[0].message.content.trim()
   }
 
-  // --- STANDARD OPENAI-COMPATIBLE API (OpenAI, OpenRouter, Groq, Featherless, Ollama, DeepSeek) ---
+
   const res = await axios.post(
     `${baseUrl.replace(/\/$/, "")}/chat/completions`,
     {
@@ -313,7 +455,7 @@ async function ai(messages) {
   return res.data.choices[0].message.content.trim()
 }
 
-// Facts memory extraction helper
+
 async function extractFacts(jid, text, reply, currentFacts) {
   try {
     const factLimit = Number(process.env.MEMORY_FACT_LIMIT || 100)
@@ -339,7 +481,7 @@ Only output the JSON array of strings, nothing else.`
 
     const resText = await ai(prompt)
     let jsonStr = resText.trim()
-    // Strip markdown code blocks if present
+
     if (jsonStr.startsWith("```")) {
       jsonStr = jsonStr.replace(/^```(json)?/, "").replace(/```$/, "").trim()
     }
@@ -359,7 +501,7 @@ Only output the JSON array of strings, nothing else.`
   return currentFacts
 }
 
-// Robust message details parsing (Text + Media details)
+
 function getMessageDetails(message) {
   if (!message) return { text: "", mediaType: null, description: "" }
   if (message.ephemeralMessage) return getMessageDetails(message.ephemeralMessage.message)
@@ -368,7 +510,7 @@ function getMessageDetails(message) {
   if (message.documentWithCaptionMessage) return getMessageDetails(message.documentWithCaptionMessage.message)
 
   const text = message.conversation || message.extendedTextMessage?.text || ""
-  
+
   if (message.imageMessage) {
     const caption = message.imageMessage.caption || ""
     return {
@@ -427,7 +569,7 @@ function getMessageDetails(message) {
 
 async function start() {
   log.info("Starting WhatsApp bot connection...")
-  
+
   const { state, saveCreds } = await useMultiFileAuthState("auth_info")
   const { version } = await fetchLatestBaileysVersion()
 
@@ -438,7 +580,7 @@ async function start() {
     printQRInTerminal: false
   })
 
-  // Initialize stats startTime if not already set
+
   updateStats(s => {
     if (!s.startTime) s.startTime = Date.now()
   })
@@ -475,201 +617,173 @@ async function start() {
       const jid = msg.key.remoteJid
       const isGroup = jid.endsWith("@g.us")
 
-      // Extract text content and media details
+
       const details = getMessageDetails(msg.message)
       let text = details.text
-      
-      // Fallback to description if there's media and no caption
+
+
       if (!text.trim() && details.description) {
         text = details.description
       }
 
       if (!text.trim()) return
 
-      // Check anti-spam rate limiting
+
       if (checkRateLimit(jid)) {
         log.warn(`Anti-spam rate limit triggered for JID: ${jid}`)
         if (shouldSendWarning(jid)) {
-          await sock.sendMessage(jid, { 
-            text: "⚠️ *Slow Down!* You are sending messages too quickly. Please wait a bit before trying again." 
+          await sock.sendMessage(jid, {
+            text: "*Slow Down!* You are sending messages too quickly. Please wait a bit before trying again."
           })
         }
         return
       }
 
-      // Mark the message as read (blue ticks) to show Numan is active
+
       await sock.readMessages([msg.key]).catch(() => {})
 
-      // Log received message
+
       log.chat(jid, text)
-      
-      // Update statistics
+
+
       updateStats(s => s.messagesReceived++)
 
-      // Load user profile history and global memory prompt
+
       const p = profile(jid)
+      updateStyleProfile(p, text)
 
-      // Check command prefixes
-      const prefixes = ["/", "!", "."]
-      const matchedPrefix = prefixes.find(p => text.startsWith(p))
 
-      if (matchedPrefix) {
-        const cleanText = text.slice(matchedPrefix.length).trim()
-        const spaceIdx = cleanText.indexOf(" ")
-        const command = (spaceIdx === -1 ? cleanText : cleanText.substring(0, spaceIdx)).toLowerCase()
-        const argsStr = spaceIdx === -1 ? "" : cleanText.substring(spaceIdx + 1).trim()
-        
-        const sender = msg.key.participant || msg.participant || jid
-        const isOwner = sender.replace(/[^0-9]/g, "").includes(process.env.OWNER_NUMBER)
 
-        log.cmd(jid, command)
+
+      if (jid === "status@broadcast" && process.env.IGNORE_STATUS === "true") return
+
+
+      if (jid.endsWith("@broadcast") && process.env.IGNORE_BROADCASTS === "true") return
+
+
+      if (isGroup) {
+        if (process.env.GROUP_AUTO_REPLY !== "true") return
+
+        const botNumber = sock.user.id.split(":")[0]
+        const botJid = botNumber + "@s.whatsapp.net"
+        const botName = process.env.BOT_NAME || "Numan"
+
+        const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+        const isMentioned = mentions.includes(botJid) ||
+                            mentions.some(m => m.startsWith(botNumber)) ||
+                            msg.message?.extendedTextMessage?.contextInfo?.participant === botJid ||
+                            text.includes(`@${botNumber}`)
+
+        const nameRegex = new RegExp(`\\b${botName}\\b`, "i")
+        const mentionsName = nameRegex.test(text)
+
+        if (!isMentioned && !mentionsName) return
+      } else {
+        if (process.env.DM_AUTO_REPLY !== "true") return
+      }
+
+      await reactToIncomingMessage(sock, jid, msg, text, details.mediaType)
+
+      const sender = msg.key.participant || msg.participant || jid
+      const ownerNumber = process.env.OWNER_NUMBER || ""
+      const isOwner = ownerNumber && sender.replace(/[^0-9]/g, "").includes(ownerNumber)
+      const action = detectNaturalAction(text, isOwner)
+
+      if (action) {
+        log.cmd(jid, action.type)
         updateStats(s => s.commandsRun++)
 
-        // --- CORE WHATSAPP COMMANDS HANDLERS ---
-        
-        // Help menu
-        if (command === "help") {
-          const helpText = `🤖 *Numan WhatsApp AI Bot* 🤖\n\n` +
-            `🔹 \`${matchedPrefix}draw <prompt>\` - Generate and send an AI image\n` +
-            `🔹 \`${matchedPrefix}clear\` / \`${matchedPrefix}forget\` - Reset memory for this chat\n\n` +
-            `👑 *Owner Commands:*\n` +
-            `👑 \`${matchedPrefix}broadcast <msg>\` - Broadcast to all users\n` +
-            `👑 \`${matchedPrefix}say <msg>\` - Make the bot say a specific message here`
-          
+        if (action.type === "help") {
+          const helpText = [
+            "*NezoPer can do this naturally:*",
+            "- Chat and remember useful details",
+            "- Match your talking style over time",
+            "- React to messages",
+            "- Generate images: say \"draw a futuristic city\"",
+            "- Clear this chat memory: say \"forget this chat\"",
+            "",
+            "Owner only: say \"broadcast: your message\" or \"say: your message\"."
+          ].join("\n")
+
           await sock.sendMessage(jid, { text: helpText })
           updateStats(s => s.repliesSent++)
+          save(userFile(jid), p)
           return
         }
 
-        // Clear memory command
-        if (command === "forget" || command === "clear") {
+        if (action.type === "clear") {
           p.history = []
           p.facts = []
           save(userFile(jid), p)
-          await sock.sendMessage(jid, { text: "🧹 *Memory Reset!* I have cleared all conversation history and facts for this chat. Let's start fresh!" })
+          await sock.sendMessage(jid, { text: "Done, I cleared this chat memory. Fresh start." })
           updateStats(s => s.repliesSent++)
           return
         }
 
-        // Image generation command
-        if (command === "draw" || command === "image") {
-          if (!argsStr) {
-            await sock.sendMessage(jid, { text: `⚠️ Please provide a prompt description! E.g. \`${matchedPrefix}draw a cute futuristic kitten\`` })
-            return
-          }
-          await sock.sendMessage(jid, { text: "🎨 *Generating your AI image... Please wait!*" })
+        if (action.type === "image") {
+          await sock.sendMessage(jid, { text: "Got it, making the image now." })
           try {
-            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(argsStr)}?width=1024&height=1024&nologo=true`
-            updateStats(s => {
-              s.imagesGenerated++
-              s.repliesSent++
-            })
+            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(action.args)}?width=1024&height=1024&nologo=true`
             await sock.sendMessage(jid, {
               image: { url: imageUrl },
-              caption: `🎨 *AI Generated Image*\n\n*Prompt:* ${argsStr}`
+              caption: `AI image\n\nPrompt: ${action.args}`
+            })
+            updateStats(s => {
+              s.imagesGenerated++
+              s.repliesSent += 2
             })
           } catch (e) {
             log.error("Image generation failed:", e)
-            await sock.sendMessage(jid, { text: "❌ Failed to generate the image. Please try again later." })
+            await sock.sendMessage(jid, { text: "Could not generate that image right now. Try again in a bit." })
+            updateStats(s => s.repliesSent++)
           }
+          save(userFile(jid), p)
           return
         }
 
-        // Owner Broadcast command
-        if (command === "broadcast") {
-          if (!isOwner) {
-            await sock.sendMessage(jid, { text: "❌ *Permission Denied:* Only the bot owner can run this command." })
-            return
-          }
-          if (!argsStr) {
-            await sock.sendMessage(jid, { text: "⚠️ Please provide a message to broadcast!" })
-            return
-          }
-          
-          await sock.sendMessage(jid, { text: "📢 *Starting broadcast to active profiles...*" })
-          
+        if (action.type === "broadcast") {
+          await sock.sendMessage(jid, { text: "Starting broadcast to active chats." })
+
           const userFiles = fs.readdirSync(USERS).filter(f => f.endsWith(".json"))
           let successCount = 0
           let failCount = 0
-          
+
           for (const file of userFiles) {
             try {
               const uData = json(path.join(USERS, file))
               if (uData && uData.jid && uData.jid !== jid) {
-                await sock.sendMessage(uData.jid, { text: `📢 *Broadcast from Numan:*\n\n${argsStr}` })
+                await sock.sendMessage(uData.jid, { text: `Broadcast from Numan:\n\n${action.args}` })
                 successCount++
-                await sleep(1000) // avoid WhatsApp spam rate limits
+                await sleep(1000)
               }
             } catch (e) {
               log.error(`Broadcast failed for ${file}:`, e)
               failCount++
             }
           }
-          
-          await sock.sendMessage(jid, { text: `✅ *Broadcast Completed!*\n\n🟢 *Success:* ${successCount}\n🔴 *Failed:* ${failCount}` })
-          updateStats(s => s.repliesSent++)
+
+          await sock.sendMessage(jid, { text: `Broadcast done. Success: ${successCount}. Failed: ${failCount}.` })
+          updateStats(s => s.repliesSent += 2)
+          save(userFile(jid), p)
           return
         }
 
-        // Owner Say command
-        if (command === "say") {
-          if (!isOwner) {
-            await sock.sendMessage(jid, { text: "❌ *Permission Denied:* Only the bot owner can run this command." })
-            return
-          }
-          if (!argsStr) {
-            await sock.sendMessage(jid, { text: "⚠️ Please provide a message!" })
-            return
-          }
-          await sock.sendMessage(jid, { text: argsStr })
+        if (action.type === "say") {
+          await sock.sendMessage(jid, { text: action.args })
           updateStats(s => s.repliesSent++)
+          save(userFile(jid), p)
           return
         }
-
-        // Fallback for unknown command
-        await sock.sendMessage(jid, { text: `⚠️ *Unknown command:* Type \`${matchedPrefix}help\` to see active commands.` })
-        updateStats(s => s.repliesSent++)
-        return
-      }
-
-      // --- CONVERSATIONAL (AI) RESPONSES ---
-
-      // Respect IGNORE_STATUS
-      if (jid === "status@broadcast" && process.env.IGNORE_STATUS === "true") return
-
-      // Respect IGNORE_BROADCASTS
-      if (jid.endsWith("@broadcast") && process.env.IGNORE_BROADCASTS === "true") return
-
-      // Check auto-reply settings
-      if (isGroup) {
-        if (process.env.GROUP_AUTO_REPLY !== "true") return
-        
-        const botNumber = sock.user.id.split(":")[0]
-        const botJid = botNumber + "@s.whatsapp.net"
-        const botName = process.env.BOT_NAME || "Numan"
-        
-        const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
-        const isMentioned = mentions.includes(botJid) ||
-                            mentions.some(m => m.startsWith(botNumber)) ||
-                            msg.message?.extendedTextMessage?.contextInfo?.participant === botJid ||
-                            text.includes(`@${botNumber}`)
-        
-        const nameRegex = new RegExp(`\\b${botName}\\b`, "i")
-        const mentionsName = nameRegex.test(text)
-        
-        if (!isMentioned && !mentionsName) return
-      } else {
-        if (process.env.DM_AUTO_REPLY !== "true") return
       }
 
       const personality = read(MEMORY)
 
-      // Fetch web link previews if there are any URLs in the text
+
       let linkPreviews = ""
       try {
         linkPreviews = await getLinkPreviews(text)
       } catch (err) {
-        // ignore crawl errors
+
       }
 
       const maxHistory = Number(process.env.MAX_HISTORY_MESSAGES || 50)
@@ -682,32 +796,36 @@ async function start() {
           role: "system",
           content: `Known facts about this user: ${JSON.stringify(p.facts)}`
         },
+        {
+          role: "system",
+          content: describeStyle(p.style)
+        },
         ...p.history
       ]
 
-      // Fetch AI Response
+
       const reply = await ai(prompt)
 
-      // Simulate realistic WhatsApp typing status: start composing
+
       await sock.sendPresenceUpdate("composing", jid)
-      
-      // Calculate realistic delay (approx 20ms per character)
+
+
       const typingDelay = Math.min(4500, Math.max(1200, reply.length * 20))
       await sleep(typingDelay)
 
-      // Save reply in history
+
       p.history.push({ role: "assistant", content: reply })
       p.history = p.history.slice(-maxHistory)
       save(userFile(jid), p)
 
-      // Send the response
+
       await sock.sendMessage(jid, { text: reply })
       log.reply(jid, reply)
-      
-      // Update statistics
+
+
       updateStats(s => s.repliesSent++)
 
-      // Extract and update facts asynchronously
+
       extractFacts(jid, text, reply, p.facts).then(newFacts => {
         const currentP = profile(jid)
         currentP.facts = newFacts
@@ -723,7 +841,7 @@ async function start() {
   })
 }
 
-// Handle process termination gracefully
+
 process.on("SIGINT", async () => {
   log.warn("Termination signal received. Shutting down gracefully...")
   process.exit(0)
